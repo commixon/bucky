@@ -263,13 +263,8 @@ class Bucky(object):
             self.proc = None
             self.psampleq = self.sampleq
 
-        if cfg.graphite_pickle_enabled:
-            carbon_client = carbon.PickleClient
-        else:
-            carbon_client = carbon.PlaintextClient
-
         self.clients = []
-        for client in cfg.custom_clients + [carbon_client]:
+        for client in cfg.custom_clients + [carbon.get_carbon_client(cfg)]:
             send, recv = multiprocessing.Pipe()
             instance = client(cfg, recv)
             self.clients.append((instance, send))

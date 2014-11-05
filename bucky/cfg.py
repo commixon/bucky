@@ -62,6 +62,8 @@ graphite_backoff_factor = 1.5
 graphite_backoff_max = 60
 graphite_pickle_enabled = False
 graphite_pickle_buffer_size = 500
+graphite_hosts = []
+graphite_threads = False
 
 full_trace = False
 

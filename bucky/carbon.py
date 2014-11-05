@@ -20,6 +20,8 @@ import time
 import socket
 import struct
 import logging
+import threading
+import collections
 try:
     import cPickle as pickle
 except ImportError:
@@ -41,16 +43,18 @@ class DebugSocket(object):
         sys.stdout.write(data)
 
 
-class CarbonClient(client.Client):
-    def __init__(self, cfg, pipe):
-        super(CarbonClient, self).__init__(pipe)
+class BaseCarbonManager(object):
+    def __init__(self, cfg, **kwargs):
         self.debug = cfg.debug
-        self.ip = cfg.graphite_ip
-        self.port = cfg.graphite_port
-        self.max_reconnects = cfg.graphite_max_reconnects
-        self.reconnect_delay = cfg.graphite_reconnect_delay
-        self.backoff_factor = cfg.graphite_backoff_factor
-        self.backoff_max = cfg.graphite_backoff_max
+        self.ip = kwargs.get('ip', cfg.graphite_ip)
+        self.port = kwargs.get('port', cfg.graphite_port)
+        self.max_reconnects = kwargs.get('max_reconnects',
+                                         cfg.graphite_max_reconnects)
+        self.reconnect_delay = kwargs.get('reconnect_delay',
+                                          cfg.graphite_reconnect_delay)
+        self.backoff_factor = kwargs.get('backoff_factor',
+                                         cfg.graphite_backoff_factor)
+        self.backoff_max = kwargs.get('backoff_max', cfg.graphite_backoff_max)
         if self.max_reconnects <= 0:
             self.max_reconnects = sys.maxint
         self.connect()
@@ -93,7 +97,7 @@ class CarbonClient(client.Client):
         raise NotImplementedError()
 
 
-class PlaintextClient(CarbonClient):
+class PlaintextCarbonManager(BaseCarbonManager):
     def send(self, host, name, value, mtime):
         stat = names.statname(host, name)
         mesg = "%s %s %s\n" % (stat, value, mtime)
@@ -110,10 +114,11 @@ class PlaintextClient(CarbonClient):
         log.error("Dropping message %s", mesg)
 
 
-class PickleClient(CarbonClient):
-    def __init__(self, cfg, pipe):
-        super(PickleClient, self).__init__(cfg, pipe)
-        self.buffer_size = cfg.graphite_pickle_buffer_size
+class PickleCarbonManager(BaseCarbonManager):
+    def __init__(self, cfg, **kwargs):
+        super(PickleCarbonManager, self).__init__(cfg, **kwargs)
+        self.buffer_size = kwargs.pop('pickle_buffer_size',
+                                      cfg.graphite_pickle_buffer_size)
         self.buffer = []
 
     def send(self, host, name, value, mtime):
@@ -137,3 +142,74 @@ class PickleClient(CarbonClient):
                 except socket.error as err:
                     log.error("Failed reconnect to Carbon server: %s", err)
         log.error("Dropping buffer!")
+
+
+class CarbonClient(client.Client):
+    def __init__(self, cfg, pipe):
+        super(CarbonClient, self).__init__(pipe)
+        self.managers = []
+        if cfg.graphite_hosts:
+            defaults = {
+                'ip': cfg.graphite_ip,
+                'port': cfg.graphite_port,
+                'max_reconnects': cfg.graphite_max_reconnects,
+                'reconnect_delay': cfg.graphite_reconnect_delay,
+                'backoff_factor': cfg.graphite_backoff_factor,
+                'backoff_max': cfg.graphite_backoff_max,
+                'pickle_enabled': cfg.graphite_pickle_enabled,
+                'pickle_buffer_size': cfg.graphite_pickle_buffer_size,
+            }
+            for item in cfg.graphite_hosts:
+                kwargs = defaults.copy()
+                kwargs.update(item)
+                if kwargs.pop('pickle_enabled'):
+                    manager = PickleCarbonManager
+                else:
+                    del kwargs['pickle_buffer_size']
+                    manager = PlaintextCarbonManager
+                self.managers.append(manager(cfg, **kwargs))
+        elif cfg.graphite_pickle_enabled:
+            self.managers.append(PickleCarbonManager(cfg))
+        else:
+            self.managers.append(PlaintextCarbonManager(cfg))
+
+    def send(self, host, name, val, mtime):
+        for manager in self.managers:
+            manager.send(host, name, val, mtime)
+
+
+class ThreadedCarbonClient(CarbonClient):
+    def __init__(self, cfg, pipe):
+        super(ThreadedCarbonClient, self).__init__(cfg, pipe)
+        self.deques = [collections.deque(maxlen=20000)
+                       for i in range(len(self.managers))]
+
+    def run(self):
+        threads = []
+        for manager, deque in zip(self.managers, self.deques):
+            threads.append(threading.Thread(target=self.run_thread,
+                                            args=(manager, deque)))
+            threads[-1].start()
+
+        super(ThreadedCarbonClient, self).run()
+
+    def run_thread(self, manager, deque):
+        while True:
+            try:
+                sample = deque.popleft()
+            except IndexError:
+                time.sleep(0.1)
+                continue
+            if sample is None:
+                return
+            manager.send(*sample)
+
+    def send(self, host, name, val, mtime):
+        for deque in self.deques:
+            deque.append((host, name, val, mtime))
+
+
+def get_carbon_client(cfg):
+    if cfg.graphite_threads:
+        return ThreadedCarbonClient
+    return CarbonClient
