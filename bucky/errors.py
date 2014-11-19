@@ -18,3 +18,7 @@ class ConfigError(BuckyError):
 
 class ProtocolError(BuckyError):
     pass
+
+
+class AuthError(ProtocolError):
+    pass

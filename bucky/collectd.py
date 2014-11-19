@@ -31,7 +31,7 @@ except ImportError:
     def setproctitle(title):
         pass
 
-from bucky.errors import ConfigError, ProtocolError
+from bucky.errors import ConfigError, ProtocolError, AuthError
 from bucky.udpserver import UDPServer
 from bucky.helpers import FileMonitor
 
@@ -306,7 +306,7 @@ class CollectDCrypto(object):
         part_type, part_len = struct.unpack("!HH", data[:4])
         sec_level = {0x0200: 1, 0x0210: 2}.get(part_type, 0)
         if sec_level < self.sec_level:
-            raise ProtocolError("Packet has lower security level than allowed")
+            raise AuthError("Packet has lower security level than allowed")
         if not sec_level:
             return data
         if sec_level == 1 and not self.sec_level:
@@ -330,11 +330,11 @@ class CollectDCrypto(object):
         uname_len = part_len - 32
         uname = data[:uname_len].decode()
         if uname not in self.auth_db:
-            raise ProtocolError("Signed packet, unknown user '%s'" % uname)
+            raise AuthError("Signed packet, unknown user '%s'" % uname)
         password = self.auth_db[uname].encode()
         sig2 = hmac.new(password, msg=data, digestmod=sha256).digest()
         if not self._hashes_match(sig, sig2):
-            raise ProtocolError("Bad signature from user '%s'" % uname)
+            raise AuthError("Bad signature from user '%s'" % uname)
         data = data[uname_len:]
         return data
 
@@ -348,7 +348,7 @@ class CollectDCrypto(object):
             raise ProtocolError("Truncated encrypted part.")
         uname, data = data[:uname_len].decode(), data[uname_len:]
         if uname not in self.auth_db:
-            raise ProtocolError("Couldn't decrypt, unknown user '%s'" % uname)
+            raise AuthError("Couldn't decrypt, unknown user '%s'" % uname)
         iv, data = data[:16], data[16:]
         password = self.auth_db[uname].encode()
         key = sha256(password).digest()
@@ -359,7 +359,7 @@ class CollectDCrypto(object):
         tag, data = data[:20], data[20:]
         tag2 = sha1(data).digest()
         if not self._hashes_match(tag, tag2):
-            raise ProtocolError("Bad checksum on enc pkt for '%s'" % uname)
+            raise AuthError("Bad checksum on enc pkt for '%s'" % uname)
         return data
 
     def _hashes_match(self, a, b):
@@ -442,7 +442,7 @@ class CollectDHandler(object):
     def parse(self, data):
         try:
             data = self.crypto.parse(data)
-        except ProtocolError as e:
+        except (AuthError, ProtocolError) as e:
             log.error("Protocol error in CollectDCrypto: %s", e)
             return
         try:
