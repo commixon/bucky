@@ -92,7 +92,7 @@ workings you'll need to use a config file. Here's the `bucky -h`
 output::
 
     Usage: main.py [OPTIONS] [CONFIG_FILE]
-    
+
     Options:
       --debug               Put server into debug mode. [False]
       --metricsd-ip=IP      IP address to bind for the MetricsD UDP socket
@@ -140,10 +140,10 @@ config file::
     metricsd_ip = "127.0.0.1"
     metricsd_port = 23632
     metricsd_enabled = True
-    
+
     # The default interval between flushes of metric data to Graphite
     metricsd_default_interval = 10.0
-    
+
     # You can specify the frequency of flushes to Graphite based on
     # the metric name used for each metric. These are specified as
     # regular expressions. An entry in this list should be a 3-tuple
@@ -158,15 +158,15 @@ config file::
     collectd_ip = "127.0.0.1"
     collectd_port = 25826
     collectd_enabled = True
-    
+
     # A list of file names for collectd types.db
     # files.
     collectd_types = []
-    
+
     # A mapping of plugin names to converter callables. These are
     # explained in more detail in the README.
     collectd_converters = {}
-    
+
     # Whether to load converters from entry points. The entry point
     # used to define converters is 'bucky.collectd.converters'.
     collectd_use_entry_points = True
@@ -184,6 +184,16 @@ config file::
     # Incoming packets are routed to workers based on source IP.
     collectd_workers = 1
 
+    # Have the parent collectd process write incoming packets to
+    # buffers and have threads flushing these buffers to the workers's pipes.
+    # Applicable only if collectd_workers > 1
+    collectd_workers_pipe_buffer = False
+
+    # Length of pipe buffers for collectd workers. Must be a positive integer
+    # or None. Setting a size of None may cause the buffers to grow huge.
+    # Applicable only if collectd_workers > 1 and collectd_workers_pipe_buffer
+    collectd_workers_pipe_buffer_size = 1000
+
     # Cryptographic settings for collectd. Security level 1 requires
     # signed packets, level 2 requires encrypted communication.
     # Auth file should contain lines in the form 'user: password'
@@ -194,7 +204,7 @@ config file::
     statsd_ip = "127.0.0.1"
     statsd_port = 8125
     statsd_enabled = True
-    
+
     # How often stats should be flushed to Graphite.
     statsd_flush_time = 10.0
 
@@ -214,7 +224,7 @@ config file::
     # Basic Graphite configuration
     graphite_ip = "127.0.0.1"
     graphite_port = 2003
-    
+
     # If the Graphite connection fails these numbers define how it
     # will reconnect. The max reconnects applies each time a
     # disconnect is encountered and the reconnect delay is the time
@@ -237,20 +247,20 @@ config file::
     # Bucky provides these settings to allow the system wide
     # configuration of how metric names are processed before
     # sending to Graphite.
-    #    
+    #
     # Prefix and postfix allow to tag all values with some value.
     name_prefix = None
     name_postfix = None
-    
+
     # The replacement character is used to munge any '.' characters
     # in name components because it is special to Graphite. Setting
     # this to None will prevent this step.
     name_replace_char = '_'
-    
+
     # Optionally strip duplicates in path components. For instance
     # a.a.b.c.c.b would be rewritten as a.b.c.b
     name_strip_duplicates = True
-    
+
     # Bucky reverses hostname components to improve the locality
     # of metric values in Graphite. For instance, "node.company.tld"
     # would be rewritten as "tld.company.node". This setting allows
@@ -258,7 +268,7 @@ config file::
     # be stripped from hostnames. For instance, if "company.tld"
     # were specified, the previous example would end up as "node".
     name_host_trim = []
-    
+
     # processor is a callable that takes a (host, name, val, time)
     # tuple as input and is expected to return a tuple of the same
     # structure to forward the sample to the clients, or None to
@@ -275,7 +285,7 @@ Configuring CollectD
 You should only need to add something like this to your collectd.conf::
 
     LoadPlugin "network"
-    
+
     <Plugin "network">
       Server "127.0.0.1" "25826"
     </Plugin>
@@ -377,7 +387,7 @@ This might be how you define a processor in your config file::
 
     def timediff(host, name, val, timestamp):
         """Drop samples with large time offset
-        
+
         Drop samples that are more than 2 minutes in the future
         or more than 5 minutes in the past.
 
