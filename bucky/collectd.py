@@ -14,10 +14,13 @@
 
 import os
 import six
+import time
 import copy
 import struct
 import signal
 import logging
+import threading
+import collections
 import multiprocessing
 
 import hmac
@@ -590,6 +593,35 @@ class CollectDWorker(multiprocessing.Process):
 
     def stop(self):
         self.send(None)
+
+
+class CollectDBufferedAsyncWorker(CollectDWorker):
+    """CollectDWorker with a buffered non blocking send"""
+
+    def __init__(self, queue, cfg, id_num=-1):
+        super(CollectDBufferedAsyncWorker, self).__init__(queue, cfg, id_num)
+        self.deque = collections.deque(maxlen=100)
+        self.dispatcher = threading.Thread(target=self.dispatch)
+        self.dispatcher.daemon = True
+        self.dispatcher.start()
+
+    def dispatch(self):
+        """Flush the deque in the pipe in an endless loop"""
+        while True:
+            if self.deque.maxlen and self.deque.maxlen == len(self.deque):
+                log.warning("Async write pipe buffer '%s' full, "
+                            "loosing packets.", self.name)
+            try:
+                item = self.deque.popleft()
+            except IndexError:
+                time.sleep(0.1)  # deque empty, take a break
+            else:
+                self.p_send.send(item)  # use original send, not buffered one
+                if item is None:
+                    return
+
+    def send(self, data):
+        self.deque.append(data)
 
 
 class CollectDServerMP(UDPServer):
