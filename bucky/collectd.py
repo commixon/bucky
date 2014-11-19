@@ -301,6 +301,7 @@ class CollectDCrypto(object):
         log.info("Loaded collectd's auth file from %s", self.auth_file)
 
     def parse(self, data):
+        """Returns a tuple of (unencrypted_data, user)"""
         if len(data) < 4:
             raise ProtocolError("Truncated header.")
         part_type, part_len = struct.unpack("!HH", data[:4])
@@ -308,7 +309,7 @@ class CollectDCrypto(object):
         if sec_level < self.sec_level:
             raise AuthError("Packet has lower security level than allowed")
         if not sec_level:
-            return data
+            return data, None
         data = data[4:]
         part_len -= 4
         if len(data) < part_len:
@@ -318,8 +319,10 @@ class CollectDCrypto(object):
             self.load_auth_file()
         if sec_level == 1:
             return self.parse_signed(part_len, data)
-        if sec_level == 2:
+        elif sec_level == 2:
             return self.parse_encrypted(part_len, data)
+        else:
+            raise ProtocolError("Unknown security level: %s" % sec_level)
 
     def parse_signed(self, part_len, data):
         if part_len <= 32:
@@ -334,7 +337,7 @@ class CollectDCrypto(object):
         if not self._hashes_match(sig, sig2):
             raise AuthError("Bad signature from user '%s'" % uname)
         data = data[uname_len:]
-        return data
+        return data, uname
 
     def parse_encrypted(self, part_len, data):
         if part_len != len(data):
@@ -358,7 +361,7 @@ class CollectDCrypto(object):
         tag2 = sha1(data).digest()
         if not self._hashes_match(tag, tag2):
             raise AuthError("Bad checksum on enc pkt for '%s'" % uname)
-        return data
+        return data, uname
 
     def _hashes_match(self, a, b):
         """Constant time comparison of bytes for py3, strings for py2"""
@@ -436,13 +439,34 @@ class CollectDHandler(object):
         self.converter = CollectDConverter(cfg)
         self.prev_samples = {}
         self.last_sample = None
+        self.filter_sample = self._true
+        self.report_packet = self._true
+        if cfg.collectd_dpi_filter_sample is not None:
+            self.filter_sample = cfg.collectd_dpi_filter_sample
+        if cfg.collectd_dpi_report_packet is not None:
+            self.report_packet = cfg.collectd_dpi_report_packet
+
+    def handle(self, data, addr):
+        ip_addr, port = addr
+        try:
+            for host, name, value, tstamp, uname in self.parse(data):
+                if self.filter_sample(ip_addr, port, uname,
+                                      host, name, value, tstamp):
+                    yield host, name, value, tstamp
+        except (AuthError, ProtocolError) as exc:
+            self.report_packet(ip_addr, port, data, exc)
+        else:
+            self.report_packet(ip_addr, port, data, None)
+
+    def _true(self, *args, **kwargs):
+        return True
 
     def parse(self, data):
         try:
-            data = self.crypto.parse(data)
+            data, uname = self.crypto.parse(data)
         except (AuthError, ProtocolError) as e:
             log.error("Protocol error in CollectDCrypto: %s", e)
-            return
+            raise
         try:
             for sample in self.parser.parse(data):
                 self.last_sample = sample
@@ -457,11 +481,14 @@ class CollectDHandler(object):
                 val = self.calculate(host, name, vtype, val, time)
                 val = self.check_range(stype, vname, val)
                 if val is not None:
-                    yield host, name, val, time
+                    yield host, name, val, time, uname
         except ProtocolError as e:
             log.error("Protocol error: %s", e)
             if self.last_sample is not None:
                 log.info("Last sample: %s", self.last_sample)
+            raise
+        finally:
+            self.last_sample = None
 
     def check_range(self, stype, vname, val):
         if val is None:
@@ -553,7 +580,7 @@ class CollectDServer(UDPServer):
         self.queue = queue
 
     def handle(self, data, addr):
-        for sample in self.handler.parse(data):
+        for sample in self.handler.handle(data, addr):
             self.queue.put(sample)
         return True
 
@@ -575,19 +602,20 @@ class CollectDWorker(multiprocessing.Process):
         handler = CollectDHandler(self.cfg)
         while True:
             try:
-                data = self.p_recv.recv()
+                item = self.p_recv.recv()
             except KeyboardInterrupt:
                 continue
-            if data is None:
+            if item is None:
                 break
-            for sample in handler.parse(data):
+            data, addr = item
+            for sample in handler.handle(data, addr):
                 self.queue.put(sample)
 
-    def send(self, data):
-        self.p_send.send(data)
+    def send(self, data, addr):
+        self.p_send.send((data, addr))
 
     def stop(self):
-        self.send(None)
+        self.p_send.send(None)
 
 
 class CollectDServerMP(UDPServer):
@@ -627,7 +655,7 @@ class CollectDServerMP(UDPServer):
         # deterministically map source ip address to worker
         index = hash(ip_addr) % len(self.workers)
         worker = self.workers[index]
-        worker.send(data)
+        worker.send(data, addr)
         # check if all is running
         for worker in self.workers:
             if not worker.is_alive():
