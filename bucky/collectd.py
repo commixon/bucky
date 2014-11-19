@@ -549,7 +549,7 @@ class CollectDHandler(object):
 
 
 class CollectDServer(UDPServer):
-    """Single processes CollectDServer"""
+    """Single process CollectDServer"""
 
     def __init__(self, queue, cfg):
         super(CollectDServer, self).__init__(cfg.collectd_ip,
@@ -600,10 +600,24 @@ class CollectDBufferedAsyncWorker(CollectDWorker):
 
     def __init__(self, queue, cfg, id_num=-1):
         super(CollectDBufferedAsyncWorker, self).__init__(queue, cfg, id_num)
-        self.deque = collections.deque(maxlen=100)
+        maxlen = cfg.collectd_workers_pipe_buffer_size
+        if maxlen is None:
+            log.warning("Param 'collectd_workers_pipe_buffer_size' is set to "
+                        "None. Buffers can grow arbitrarily large!")
+        else:
+            error = ("Param 'collectd_workers_pipe_buffer_size' (=%s) must be "
+                     "an integer greater than 0 or None (no limit)." % maxlen)
+            try:
+                maxlen = int(maxlen)
+            except:
+                raise ConfigError(error)
+            if maxlen <= 0:
+                raise ConfigError(error)
+        self.deque = collections.deque(maxlen=maxlen)
         self.dispatcher = threading.Thread(target=self.dispatch)
         self.dispatcher.daemon = True
         self.dispatcher.start()
+        log.info("Configured buffers for collectd pipes with size: %s", maxlen)
 
     def dispatch(self):
         """Flush the deque in the pipe in an endless loop"""
@@ -647,9 +661,13 @@ class CollectDServerMP(UDPServer):
             log.info("Received SIGTERM")
             self.close()
 
+        if self.cfg.collectd_workers_pipe_buffer:
+            worker_type = CollectDBufferedAsyncWorker
+        else:
+            worker_type = CollectDWorker
         self.workers = []
         for i in range(self.cfg.collectd_workers):
-            worker = CollectDWorker(self.queue, self.cfg, i)
+            worker = worker_type(self.queue, self.cfg, i)
             worker.start()
             self.workers.append(worker)
 
