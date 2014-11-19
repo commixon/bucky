@@ -309,8 +309,6 @@ class CollectDCrypto(object):
             raise AuthError("Packet has lower security level than allowed")
         if not sec_level:
             return data
-        if sec_level == 1 and not self.sec_level:
-            return data[part_len:]
         data = data[4:]
         part_len -= 4
         if len(data) < part_len:
