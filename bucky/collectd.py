@@ -563,11 +563,11 @@ class CollectDServer(UDPServer):
 class CollectDWorker(multiprocessing.Process):
     """CollectDWorker plugs a CollectDHandler between a pipe and a queue"""
 
-    def __init__(self, pipe, queue, cfg, id_num=-1):
+    def __init__(self, queue, cfg, id_num=-1):
         super(CollectDWorker, self).__init__()
         self.daemon = True
         self.name = "CollectDWorker%d" % id_num
-        self.pipe = pipe
+        self.p_recv, self.p_send = multiprocessing.Pipe(duplex=False)
         self.queue = queue
         self.cfg = cfg
 
@@ -577,13 +577,19 @@ class CollectDWorker(multiprocessing.Process):
         handler = CollectDHandler(self.cfg)
         while True:
             try:
-                data = self.pipe.recv()
+                data = self.p_recv.recv()
             except KeyboardInterrupt:
                 continue
             if data is None:
                 break
             for sample in handler.parse(data):
                 self.queue.put(sample)
+
+    def send(self, data):
+        self.p_send.send(data)
+
+    def stop(self):
+        self.send(None)
 
 
 class CollectDServerMP(UDPServer):
@@ -611,10 +617,9 @@ class CollectDServerMP(UDPServer):
 
         self.workers = []
         for i in range(self.cfg.collectd_workers):
-            recv, send = multiprocessing.Pipe()
-            worker = CollectDWorker(recv, self.queue, self.cfg, i)
+            worker = CollectDWorker(self.queue, self.cfg, i)
             worker.start()
-            self.workers.append((worker, send))
+            self.workers.append(worker)
 
         signal.signal(signal.SIGTERM, sigterm_handler)
         super(CollectDServerMP, self).run()
@@ -623,10 +628,10 @@ class CollectDServerMP(UDPServer):
         ip_addr, port = addr
         # deterministically map source ip address to worker
         index = hash(ip_addr) % len(self.workers)
-        worker, pipe = self.workers[index]
-        pipe.send(data)
+        worker = self.workers[index]
+        worker.send(data)
         # check if all is running
-        for worker, pipe in self.workers:
+        for worker in self.workers:
             if not worker.is_alive():
                 log.error("Worker %s died, stopping server.", worker)
                 return
@@ -634,10 +639,10 @@ class CollectDServerMP(UDPServer):
 
     def pre_shutdown(self):
         log.info("Shutting down CollectDServer")
-        for worker, pipe in self.workers:
+        for worker in self.workers:
             log.info("Stopping worker %s", worker)
-            pipe.send(None)
-        for worker, pipe in self.workers:
+            worker.stop()
+        for worker in self.workers:
             worker.join(self.cfg.process_join_timeout)
         for child in multiprocessing.active_children():
             log.error("Child %s didn't die gracefully, terminating", child)
