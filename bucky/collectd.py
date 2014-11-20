@@ -318,7 +318,13 @@ class CollectDCrypto(object):
             log.info("Collectd authfile modified, reloading")
             self.load_auth_file()
         if sec_level == 1:
-            return self.parse_signed(part_len, data)
+            try:
+                return self.parse_signed(part_len, data)
+            except AuthError:
+                if not self.sec_level:
+                    # signing not required, so return payload without uname
+                    return data[part_len:], None
+                raise
         elif sec_level == 2:
             return self.parse_encrypted(part_len, data)
         else:
