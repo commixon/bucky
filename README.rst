@@ -241,6 +241,7 @@ config file::
     # Configuration for sending samples to InfluxDB
     influxdb_host = 'localhost'
     influxdb_port = 8086
+    influxdb_buffer_size = 100
     influxdb_username = 'root'
     influxdb_password = 'root'
     influxdb_database = 'bucky'

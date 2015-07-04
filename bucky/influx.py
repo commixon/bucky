@@ -44,3 +44,28 @@ class InfluxDBClient(client.Client):
             ],
             database=self.database,
         )
+
+
+class InfluxDBBatchClient(InfluxDBClient):
+    def __init__(self, cfg, pipe):
+        super(InfluxDBBatchClient, self).__init__(cfg, pipe)
+        self.buffer_size = cfg.influxdb_buffer_size
+        self.buffer = []
+
+    def send(self, host, name, value, time):
+        stat = names.statname(host, name)
+        self.buffer.append((stat, time, value))
+        if len(self.buffer) >= self.buffer_size:
+            self.client.write_points(
+                [{
+                    'measurement': stat,
+                    'tags': {
+                    },
+                    'fields': {
+                        'value': value,
+                    },
+                    'time': time,
+                } for stat, time, value in self.buffer],
+                database=self.database,
+            )
+            self.buffer = []

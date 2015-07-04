@@ -66,6 +66,7 @@ graphite_pickle_buffer_size = 500
 influxdb_enabled = True
 influxdb_ip = 'localhost'
 influxdb_port = 8086
+influxdb_buffer_size = 100
 influxdb_username = 'root'
 influxdb_password = 'root'
 influxdb_database = 'bucky'

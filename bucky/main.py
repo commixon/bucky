@@ -291,7 +291,10 @@ class Bucky(object):
             else:
                 client_types.append(carbon.PlaintextClient)
         if cfg.influxdb_enabled:
-            client_types.append(influx.InfluxDBClient)
+            if cfg.influxdb_buffer_size > 1:
+                client_types.append(influx.InfluxDBBatchClient)
+            else:
+                client_types.append(influx.InfluxDBClient)
 
         self.clients = []
         for client in client_types:
