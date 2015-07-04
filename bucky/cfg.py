@@ -53,7 +53,7 @@ statsd_delete_sets = True
 statsd_onlychanged_gauges = True
 # send gauge value to graphite only if there was a change
 
-
+graphite_enabled = True
 graphite_ip = "127.0.0.1"
 graphite_port = 2003
 graphite_max_reconnects = 60

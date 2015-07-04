@@ -121,6 +121,11 @@ def options():
             help="Port of the Graphite/Carbon server [%default]"
         ),
         op.make_option(
+            "--disable-graphite", dest="graphite_enabled",
+            default=cfg.graphite_enabled, action="store_false",
+            help="Disable the Graphite client"
+        ),
+        op.make_option(
             "--full-trace", dest="full_trace",
             default=cfg.full_trace, action="store_true",
             help="Display full error if config file fails to load"
@@ -263,13 +268,15 @@ class Bucky(object):
             self.proc = None
             self.psampleq = self.sampleq
 
-        if cfg.graphite_pickle_enabled:
-            carbon_client = carbon.PickleClient
-        else:
-            carbon_client = carbon.PlaintextClient
+        client_types = list(cfg.custom_clients)
+        if cfg.graphite_enabled:
+            if cfg.graphite_pickle_enabled:
+                client_types.append(carbon.PickleClient)
+            else:
+                client_types.append(carbon.PlaintextClient)
 
         self.clients = []
-        for client in cfg.custom_clients + [carbon_client]:
+        for client in client_types:
             send, recv = multiprocessing.Pipe()
             instance = client(cfg, recv)
             self.clients.append((instance, send))
