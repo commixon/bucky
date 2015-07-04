@@ -63,6 +63,18 @@ graphite_backoff_max = 60
 graphite_pickle_enabled = False
 graphite_pickle_buffer_size = 500
 
+influxdb_enabled = True
+influxdb_ip = 'localhost'
+influxdb_port = 8086
+influxdb_username = 'root'
+influxdb_password = 'root'
+influxdb_database = 'bucky'
+influxdb_ssl = False
+influxdb_verify_ssl = False
+influxdb_timeout = None
+influxdb_use_udp = False
+influxdb_udp_port = 4444
+
 full_trace = False
 
 name_prefix = None

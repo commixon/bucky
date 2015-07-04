@@ -112,6 +112,10 @@ output::
       --disable-statsd      Disable the StatsD server
       --graphite-ip=IP      IP address of the Graphite/Carbon server [127.0.0.1]
       --graphite-port=INT   Port of the Graphite/Carbon server [2003]
+      --disable-graphite    Disable the Graphite/Carbon client
+      --influxdb-ip=IP      IP address of the InfluxDB server [127.0.0.1]
+      --influxdb-port=INT   Port of the InfluxDB
+      --disable-influxdb    Disable the InfluxDB client
       --full-trace          Display full error if config file fails to load
       --log-level=NAME      Logging output verbosity [INFO]
       --version             show program's version number and exit
@@ -233,6 +237,18 @@ config file::
     # on your Graphite cache/relay.
     graphite_pickle_enabled = False
     graphite_pickle_buffer_size = 500
+
+    # Configuration for sending samples to InfluxDB
+    influxdb_host = 'localhost'
+    influxdb_port = 8086
+    influxdb_username = 'root'
+    influxdb_password = 'root'
+    influxdb_database = 'bucky'
+    influxdb_ssl = False
+    influxdb_verify_ssl = False
+    influxdb_timeout = None
+    influxdb_use_udp = False
+    influxdb_udp_port = 4444
 
     # Configuring custom clients: custom_clients should be a list of subclasses
     # of bucky.client.Client

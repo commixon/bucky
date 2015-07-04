@@ -33,6 +33,7 @@ except ImportError:
 import bucky
 import bucky.cfg as cfg
 import bucky.carbon as carbon
+import bucky.influx as influx
 import bucky.collectd as collectd
 import bucky.metricsd as metricsd
 import bucky.statsd as statsd
@@ -124,6 +125,21 @@ def options():
             "--disable-graphite", dest="graphite_enabled",
             default=cfg.graphite_enabled, action="store_false",
             help="Disable the Graphite client"
+        ),
+        op.make_option(
+            "--influxdb-ip", dest="influxdb_ip", metavar="IP",
+            default=cfg.influxdb_ip,
+            help="IP address of the InfluxDB server [%default]"
+        ),
+        op.make_option(
+            "--influxdb-port", dest="influxdb_port", metavar="INT",
+            type="int", default=cfg.influxdb_port,
+            help="Port of the InfluxDB server [%default]"
+        ),
+        op.make_option(
+            "--disable-influxdb", dest="influxdb_enabled",
+            default=cfg.influxdb_enabled, action="store_false",
+            help="Disable the InfluxDB client"
         ),
         op.make_option(
             "--full-trace", dest="full_trace",
@@ -274,6 +290,8 @@ class Bucky(object):
                 client_types.append(carbon.PickleClient)
             else:
                 client_types.append(carbon.PlaintextClient)
+        if cfg.influxdb_enabled:
+            client_types.append(influx.InfluxDBClient)
 
         self.clients = []
         for client in client_types:
