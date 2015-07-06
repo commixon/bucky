@@ -178,6 +178,10 @@ class NameParser(object):
             measurement, tags = node.template.process(name)
             return measurement, tags
 
+    def __call__(self, name):
+        """Call process on name, allows instance to be used as a function"""
+        return self.process(name)
+
 
 if __name__ == "__main__":
     import sys

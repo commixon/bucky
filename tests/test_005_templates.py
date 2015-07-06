@@ -86,13 +86,6 @@ def test_apply_template():
             'measurement': 'foo',
         },
         {
-            'test': 'wildcard measurement at end',
-            'name': 'prod.us-west.server01.cpu.load',
-            'template': 'env.zone.host.measurement*',
-            'measurement': 'cpu.load',
-            'tags': {'env': 'prod', 'zone': 'us-west', 'host': 'server01'},
-        },
-        {
             'test': 'skip fields',
             'name': 'ignore.us-west.ignore-this-too.cpu.load',
             'template': '.zone..measurement*',
@@ -106,6 +99,27 @@ def test_apply_template():
             'measurement': 'localhost.cpu',
             'tags': {'host': 'localhost', 'metric': 'cpu'},
         },
+        {
+            'test': 'wildcard measurement at end',
+            'name': 'prod.us-west.server01.cpu.load',
+            'template': 'env.zone.host.measurement*',
+            'measurement': 'cpu.load',
+            'tags': {'env': 'prod', 'zone': 'us-west', 'host': 'server01'},
+        },
+        {
+            'test': 'two measurement parts',
+            'name': 'prod.us-west.server01.cpu.load',
+            'template': 'env.zone.measurement.plugin.measurement',
+            'measurement': 'server01.load',
+            'tags': {'env': 'prod', 'zone': 'us-west', 'plugin': 'cpu'}
+        },
+        {
+            'test': 'three measurement parts, last with wildcard',
+            'name': 'prod.us-west.server01.cpu.load.shortterm',
+            'template': 'measurement.zone.measurement.plugin.measurement*',
+            'measurement': 'prod.server01.load.shortterm',
+            'tags': {'zone': 'us-west', 'plugin': 'cpu'}
+        },
     ]
     for case in cases:
         def _test_apply_template():
@@ -114,8 +128,7 @@ def test_apply_template():
             t.eq(measurement, case['measurement'])
             t.eq(tags, case.get('tags', {}))
 
-        lbl = "Testing template application '%s': %s on %s" % (
+        _test_apply_template.description = "Template test '%s': %s on %s" % (
             case['test'], case['template'], case['name']
         )
-        _test_apply_template.description = lbl
         yield _test_apply_template
