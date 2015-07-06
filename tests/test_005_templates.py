@@ -198,6 +198,41 @@ def test_parser():
             'measurement': 'cpu_load',
             'tags': {'host': 'server01'},
         },
+        {
+            'test': 'default tags',
+            'templates': 'servers.localhost .host.measurement*',
+            'global_tags': {'region': 'us-east', 'zone': '1c',
+                            'host': 'should not set'},
+            'name': 'servers.localhost.cpu_load',
+            'measurement': 'cpu_load',
+            'tags': {'region': 'us-east', 'zone': '1c', 'host': 'localhost'},
+        },
+        {
+            'test': 'default template tags',
+            'templates': 'servers.localhost .host.measurement* zone=1c',
+            'global_tags': {'region': 'us-east', 'host': 'should not set'},
+            'name': 'servers.localhost.cpu_load',
+            'measurement': 'cpu_load',
+            'tags': {'region': 'us-east', 'zone': '1c', 'host': 'localhost'},
+        },
+        {
+            'test': 'default template tags override global default tags',
+            'templates': ('servers.localhost .host.measurement* '
+                          'zone=1c,region=us-east'),
+            'global_tags': {'region': 'should not set',
+                            'host': 'should not set'},
+            'name': 'servers.localhost.cpu_load',
+            'measurement': 'cpu_load',
+            'tags': {'region': 'us-east', 'zone': '1c', 'host': 'localhost'},
+        },
+        {
+            'test': 'multiple whitespace in template line',
+            'templates': 'servers.localhost    .host.measurement*   zone=1c',
+            'global_tags': {'region': 'us-east', 'host': 'should not set'},
+            'name': 'servers.localhost.cpu_load',
+            'measurement': 'cpu_load',
+            'tags': {'region': 'us-east', 'zone': '1c', 'host': 'localhost'},
+        },
     ]
     for case in cases:
         def _test_parser():

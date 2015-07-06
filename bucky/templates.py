@@ -123,7 +123,7 @@ class Template(object):
             self.match = parts[0]
             self.template = parts[1]
             if len(parts) == 3:
-                for tagpart in parts.split(','):
+                for tagpart in parts[2].split(','):
                     tagkv = tagpart.split('=')
                     if not len(tagkv) == 2:
                         raise ProtocolError("Invalid tag part: %s" % tagpart)
