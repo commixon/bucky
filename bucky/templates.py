@@ -56,11 +56,13 @@ class Node(object):
             if subvalue:
                 return child.find_match(subvalue)
             return child
-        if self.children[-1].value == '*':
+        if self.children and self.children[-1].value == '*':
             child = self.children[-1]
             if subvalue:
                 return child.find_match(subvalue)
             return child
+        if self.template:
+            return self
 
     def __cmp__(self, node):
         """Compare magic method used to sort children nodes"""
@@ -163,20 +165,24 @@ class NameParser(object):
         tags: global default tags to apply to all processed metrics
 
         """
+        if isinstance(lines, basestring):
+            lines = lines.splitlines()
+        lines = [line.strip() for line in lines if line]
         self.filter_tree = Node('ROOT', '')
         for line in lines:
-            line = line.strip()
             log.debug("InfluxDBNameParser template line '%s'.", line)
             template = Template(line, separator, tags)
             self.filter_tree.add_child(template.match, template)
+        self.filter_tree.add_child('*', Template('* measurement*'))
         self.filter_tree.check_tree()
 
     def process(self, name):
         """Process a name and return measurement and tags"""
         node = self.filter_tree.find_match(name)
         if node:
-            measurement, tags = node.template.process(name)
-            return measurement, tags
+            return node.template.process(name)
+        log.warning("No template found for '%s', not even default template.")
+        return name, {}
 
     def __call__(self, name):
         """Call process on name, allows instance to be used as a function"""
