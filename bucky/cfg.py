@@ -75,6 +75,8 @@ influxdb_verify_ssl = False
 influxdb_timeout = None
 influxdb_use_udp = False
 influxdb_udp_port = 4444
+import bucky.templates
+influxdb_name_parser = bucky.templates.NameParser()
 
 full_trace = False
 

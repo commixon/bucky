@@ -157,7 +157,7 @@ class Template(object):
 class NameParser(object):
     """Helper class to construct InfluxDB measurement and tags from name"""
 
-    def __init__(self, lines, separator='.', tags=None):
+    def __init__(self, lines='', separator='.', tags=None):
         """Initialize InfluxDBNameParser
 
         separator: use this when combining multiple metric name parts
