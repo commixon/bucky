@@ -42,27 +42,26 @@ class CPUConverter(object):
     PRIORITY = -1
 
     def __call__(self, sample):
-        return ["cpu", sample["plugin_instance"], sample["type_instance"]]
+
+        return [(key, sample[key])
+                for key in ('plugin', 'plugin_instance', 'type_instance')]
 
 
 class InterfaceConverter(object):
     PRIORITY = -1
 
     def __call__(self, sample):
-        return filter(None, [
-            "interface",
-            sample.get("plugin_instance", ""),
-            sample.get("type_instance", ""),
-            sample["type"],
-            sample["value_name"]
-        ])
+        return [(key, sample.get(key))
+                for key in ('plugin', 'plugin_instance', 'type_instance',
+                            'type', 'value_name')]
 
 
 class MemoryConverter(object):
     PRIORITY = -1
 
     def __call__(self, sample):
-        return ["memory", sample["type_instance"]]
+        return [(key, sample[key])
+                for key in ('plugin', 'type_instance')]
 
 
 class DefaultConverter(object):
@@ -70,18 +69,19 @@ class DefaultConverter(object):
 
     def __call__(self, sample):
         parts = []
-        parts.append(sample["plugin"].strip())
+        parts.append(("plugin", sample["plugin"].strip()))
         if sample.get("plugin_instance"):
-            parts.append(sample["plugin_instance"].strip())
+            parts.append(("plugin_instance",
+                          sample["plugin_instance"].strip()))
         stype = sample.get("type", "").strip()
         if stype and stype != "value":
-            parts.append(stype)
+            parts.append(("type", stype))
         stypei = sample.get("type_instance", "").strip()
         if stypei:
-            parts.append(stypei)
+            parts.append(("type_instance", stypei))
         vname = sample.get("value_name").strip()
         if vname and vname != "value":
-            parts.append(vname)
+            parts.append(("value_name", vname))
         return parts
 
 
@@ -384,17 +384,17 @@ class CollectDConverter(object):
         default = self.converters["_default"]
         handler = self.converters.get(sample["plugin"], default)
         try:
-            name_parts = handler(sample)
-            if name_parts is None:
+            name_parts = handler(sample) or ()
+            name_parts = [part for part in name_parts if part[1]]
+            if not name_parts:
                 return  # treat None as "ignore sample"
-            name = '.'.join(name_parts)
         except:
             log.exception("Exception in sample handler  %s (%s):", sample["plugin"], handler)
             return
         host = sample.get("host", "")
         return (
             host,
-            name,
+            tuple(name_parts),
             sample["value_type"],
             sample["value"],
             int(sample["time"])
@@ -454,7 +454,7 @@ class CollectDHandler(object):
                 if sample is None:
                     continue
                 host, name, vtype, val, time = sample
-                if not name.strip():
+                if not name:
                     continue
                 val = self.calculate(host, name, vtype, val, time)
                 val = self.check_range(stype, vname, val)

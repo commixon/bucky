@@ -33,6 +33,11 @@ class Client(multiprocessing.Process):
         self.daemon = True
         self.pipe = pipe
 
+    def preparse_sample(self, host, name, value, time):
+        if not isinstance(name, str):
+            name = '.'.join(kv[1] for kv in name)
+        return host, name, value, time
+
     def run(self):
         setproctitle("bucky: %s" % self.__class__.__name__)
         while True:
@@ -42,7 +47,15 @@ class Client(multiprocessing.Process):
                 continue
             if sample is None:
                 break
+            sample = self.preparse_sample(*sample)
             self.send(*sample)
 
     def send(self, host, name, value, time):
         raise NotImplementedError()
+
+
+class KVNameClient(Client):
+    def preparse_sample(self, host, name, value, time):
+        if isinstance(name, str):
+            name = (('name', name))
+        return host, name, value, time

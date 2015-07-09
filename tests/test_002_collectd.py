@@ -87,7 +87,8 @@ def check_samples(samples, seq_function, count, name):
     i = 0
     for sample in samples:
         if sample[1] != name:
-            continue
+            if '.'.join(part[1] for part in sample[1]) != name:
+                continue
         t.eq(sample[2], seq_function(i))
         i += 1
     t.eq(i, count)
